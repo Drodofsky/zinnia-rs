@@ -21,7 +21,7 @@ fn main() {
     if cfg!(target_os = "windows") {
         build
             .define("_CRT_SECURE_NO_WARNINGS", None)
-            .define("ZINNIA_DLL", None)
+            .define("ZINNIA_DLL_EXTERN", "")
             .define("HAVE_WINDOWS_H", None)
             .flag_if_supported("/EHsc")
             .flag_if_supported("/wd4996");
