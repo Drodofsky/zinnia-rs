@@ -1,4 +1,17 @@
+use std::fs;
 fn main() {
+    // FIX
+    let trainer_path = "vendor/zinnia/trainer.cpp";
+
+    let content = fs::read_to_string(trainer_path).unwrap();
+
+    let fixed = content.replace(
+        "std::make_pair<std::string, FeatureNode *>(y, fn)",
+        "std::make_pair(y, fn)",
+    );
+
+    fs::write(trainer_path, fixed).unwrap();
+
     let files = [
         "vendor/zinnia/param.cpp",
         "vendor/zinnia/recognizer.cpp",
@@ -7,6 +20,7 @@ fn main() {
         "vendor/zinnia/feature.cpp",
         "vendor/zinnia/libzinnia.cpp",
         "vendor/zinnia/character.cpp",
+        "vendor/zinnia/trainer.cpp",
     ];
 
     let mut build = cc::Build::new();
