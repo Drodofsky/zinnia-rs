@@ -47,4 +47,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+## Models
+
+This crate does not include pretrained models. You can use models from projects like:
+
+- [tegaki](https://tegaki.github.io/)
+- Zinnia-Tomoe
 
