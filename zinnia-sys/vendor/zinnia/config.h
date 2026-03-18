@@ -1,6 +1,10 @@
 #ifndef ZINNIA_CONFIG_H_
 #define ZINNIA_CONFIG_H_
 
+#ifdef _WIN32
+#define HAVE_WINDOWS_H 1
+#endif
+
 #define HAVE_CTYPE_H 1
 #define HAVE_DLFCN_H 1
 #define HAVE_FCNTL_H 1
