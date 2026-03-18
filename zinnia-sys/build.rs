@@ -10,10 +10,12 @@ fn main() {
     ];
 
     let mut build = cc::Build::new();
+
     build
         .cpp(true)
         .include("vendor/zinnia")
         .define("HAVE_CONFIG_H", "1")
+        .define("DLL_EXPORT", "1")
         .flag_if_supported("-std=c++11")
         .flag_if_supported("-fPIC")
         .flag_if_supported("-w");
@@ -21,7 +23,6 @@ fn main() {
     if cfg!(target_os = "windows") {
         build
             .define("_CRT_SECURE_NO_WARNINGS", None)
-            .define("ZINNIA_DLL_EXTERN", "")
             .define("HAVE_WINDOWS_H", None)
             .flag_if_supported("/EHsc")
             .flag_if_supported("/wd4996");
