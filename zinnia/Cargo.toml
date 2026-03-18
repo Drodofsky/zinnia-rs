@@ -1,0 +1,8 @@
+[package]
+name = "zinnia"
+version = "0.1.0"
+edition = "2024"
+
+
+[dependencies]
+zinnia-sys = {path = "../zinnia-sys"}
