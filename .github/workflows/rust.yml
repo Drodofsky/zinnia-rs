@@ -11,12 +11,18 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Create model directory
+        shell: bash
         run: mkdir -p model
 
       - name: Download and unpack Tegaki model
@@ -35,6 +41,7 @@ jobs:
           cp "$model_path" model/handwriting-ja.model
 
       - name: Verify model exists
+        shell: bash
         run: ls -l model && test -f model/handwriting-ja.model
 
       - name: Build
