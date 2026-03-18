@@ -18,6 +18,15 @@ fn main() {
         .flag_if_supported("-fPIC")
         .flag_if_supported("-w");
 
+    if cfg!(target_os = "windows") {
+        build
+            .define("_CRT_SECURE_NO_WARNINGS", None)
+            .define("ZINNIA_DLL", None)
+            .define("HAVE_WINDOWS_H", None)
+            .flag_if_supported("/EHsc")
+            .flag_if_supported("/wd4996");
+    }
+
     for file in files {
         build.file(file);
         println!("cargo:rerun-if-changed={file}");
