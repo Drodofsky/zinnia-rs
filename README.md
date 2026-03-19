@@ -8,6 +8,7 @@ This crate provides a safe and ergonomic Rust API on top of the original C++ lib
 
 - Safe Rust wrapper (`zinnia`)
 - Raw FFI bindings (`zinnia-sys`)
+- Python bindings (`zinnia-py`)
 - Lazy initialization
 - Simple stroke-based API
 
