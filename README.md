@@ -64,6 +64,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - Respects light/dark theme
 - Optional Klee One font for the hint character
 
+![Anki](media/anki_1.png)
+![Anki](media/anki_2.png)
+
+
 ## Models
 
 This crate does not include pretrained models. You can use models from projects like:
