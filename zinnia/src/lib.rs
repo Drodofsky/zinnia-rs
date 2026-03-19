@@ -2,15 +2,21 @@ use std::{
     ffi::{CStr, CString},
     path::Path,
     ptr::null_mut,
+    sync::{Mutex, MutexGuard, PoisonError},
 };
 
 #[derive(Default, Debug)]
 pub struct Recognizer {
-    raw: *mut zinnia_sys::zinnia_recognizer_t,
+    raw: Mutex<*mut zinnia_sys::zinnia_recognizer_t>,
 }
+
+unsafe impl Send for Recognizer {}
+
+unsafe impl Sync for Recognizer {}
+
 #[derive(Default, Debug)]
 pub struct Character {
-    raw: *mut zinnia_sys::zinnia_character_t,
+    raw: Mutex<*mut zinnia_sys::zinnia_character_t>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -28,7 +34,7 @@ impl Character {
 
         // SAFETY:
         // `ensure_initialized()` guarantees `self.raw` is a valid non-null character pointer.
-        unsafe { zinnia_sys::zinnia_character_set_width(self.raw, width) };
+        unsafe { zinnia_sys::zinnia_character_set_width(*self.raw.lock()?, width) };
 
         Ok(())
     }
@@ -37,19 +43,19 @@ impl Character {
 
         // SAFETY:
         // `ensure_initialized()` guarantees `self.raw` is a valid non-null character pointer.
-        unsafe { zinnia_sys::zinnia_character_set_height(self.raw, height) };
+        unsafe { zinnia_sys::zinnia_character_set_height(*self.raw.lock()?, height) };
 
         Ok(())
     }
     pub fn add(&mut self, stroke_id: usize, x: i32, y: i32) -> Result<(), Error> {
         self.ensure_initialized()?;
-
+        let local_raw = self.raw.lock()?;
         // SAFETY:
         // `ensure_initialized()` guarantees `self.raw` is a valid non-null character pointer.
-        let ok = unsafe { zinnia_sys::zinnia_character_add(self.raw, stroke_id, x, y) };
+        let ok = unsafe { zinnia_sys::zinnia_character_add(*local_raw, stroke_id, x, y) };
 
         if ok == 0 {
-            return Err(Error::Zinnia(self.error_message()));
+            return Err(Error::Zinnia(Self::error_message(*local_raw)));
         }
 
         Ok(())
@@ -59,19 +65,19 @@ impl Character {
 
         // SAFETY:
         // `ensure_initialized()` guarantees `self.raw` is a valid non-null character pointer.
-        unsafe { zinnia_sys::zinnia_character_clear(self.raw) };
+        unsafe { zinnia_sys::zinnia_character_clear(*self.raw.lock()?) };
 
         Ok(())
     }
-    fn error_message(&self) -> String {
-        if self.raw.is_null() {
+    fn error_message(raw: *mut zinnia_sys::zinnia_character_t) -> String {
+        if raw.is_null() {
             return "character is not initialized".to_string();
         }
 
         // SAFETY:
         // `self.raw` is checked for null above. By type invariant, non-null means
         // it came from `zinnia_character_new` and has not yet been destroyed.
-        let ptr = unsafe { zinnia_sys::zinnia_character_strerror(self.raw) };
+        let ptr = unsafe { zinnia_sys::zinnia_character_strerror(raw) };
 
         if ptr.is_null() {
             return "unknown zinnia error".to_string();
@@ -85,7 +91,8 @@ impl Character {
     }
 
     fn ensure_initialized(&mut self) -> Result<(), Error> {
-        if self.raw.is_null() {
+        let mut local_raw = self.raw.lock()?;
+        if local_raw.is_null() {
             // SAFETY:
             // Calls Zinnia's constructor function and stores the returned pointer.
             // A null return is handled as an error below.
@@ -94,29 +101,34 @@ impl Character {
                 return Err(Error::InitializationFailed);
             }
 
-            self.raw = res;
+            *local_raw = res;
         }
 
         Ok(())
     }
 
-    fn destroy_raw(&mut self) {
-        if !self.raw.is_null() {
+    fn destroy_raw(&mut self) -> Result<(), Error> {
+        let mut local_raw = self.raw.lock()?;
+        if !local_raw.is_null() {
             // SAFETY:
             // `self.raw` is owned by this struct and was created by
             // `zinnia_character_new`. We only destroy it once here.
-            unsafe { zinnia_sys::zinnia_character_destroy(self.raw) };
-            self.raw = null_mut();
+            unsafe { zinnia_sys::zinnia_character_destroy(*local_raw) };
+            *local_raw = null_mut();
         }
+        Ok(())
     }
 }
 
+unsafe impl Send for Character {}
+
+unsafe impl Sync for Character {}
 impl Recognizer {
     pub fn new() -> Self {
         Self::default()
     }
     pub fn open<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
-        self.destroy_raw();
+        self.destroy_raw()?;
         // SAFETY:
         // Calls Zinnia's constructor function and stores the returned pointer.
         // A null return is handled as an error below.
@@ -124,8 +136,8 @@ impl Recognizer {
         if res.is_null() {
             return Err(Error::InitializationFailed);
         }
-
-        self.raw = res;
+        let mut local_raw = self.raw.lock()?;
+        *local_raw = res;
 
         let c_path = CString::new(path.as_ref().to_string_lossy().as_bytes())
             .map_err(|_| Error::PathContainsNul)?;
@@ -133,20 +145,22 @@ impl Recognizer {
         // SAFETY:
         // -  `self.raw` is a valid non-null recognizer pointer.
         // - `c_path` is a valid NUL-terminated string.
-        let ok = unsafe { zinnia_sys::zinnia_recognizer_open(self.raw, c_path.as_ptr()) };
+        let ok = unsafe { zinnia_sys::zinnia_recognizer_open(*local_raw, c_path.as_ptr()) };
 
         if ok == 0 {
-            return Err(Error::Zinnia(self.error_message()));
+            return Err(Error::Zinnia(Self::error_message(*local_raw)?));
         }
 
         Ok(())
     }
     pub fn classify(&self, character: &Character, nbest: usize) -> Result<Vec<Candidate>, Error> {
-        if self.raw.is_null() {
+        let local_raw = self.raw.lock()?;
+        if local_raw.is_null() {
             return Err(Error::Uninitialized);
         }
+        let local_character = character.raw.lock()?;
 
-        if character.raw.is_null() {
+        if local_character.is_null() {
             return Err(Error::Uninitialized);
         }
 
@@ -155,10 +169,10 @@ impl Recognizer {
         // - `character.raw` is checked for null above and is assumed valid.
         // - both pointers are owned by their wrappers and not freed for the duration of this call.
         let result =
-            unsafe { zinnia_sys::zinnia_recognizer_classify(self.raw, character.raw, nbest) };
+            unsafe { zinnia_sys::zinnia_recognizer_classify(*local_raw, *local_character, nbest) };
 
         if result.is_null() {
-            return Err(Error::Zinnia(self.error_message()));
+            return Err(Error::Zinnia(Self::error_message(*local_raw)?));
         }
 
         // SAFETY:
@@ -192,46 +206,48 @@ impl Recognizer {
 
         Ok(candidates)
     }
-    fn error_message(&self) -> String {
-        if self.raw.is_null() {
-            return "recognizer is not initialized".to_string();
+    fn error_message(raw: *mut zinnia_sys::zinnia_recognizer_t) -> Result<String, Error> {
+        if raw.is_null() {
+            return Err(Error::Uninitialized);
         }
 
         // SAFETY:
         // `self.raw` is checked for null above. By type invariant, non-null means
         // it came from `zinnia_recognizer_new` and has not yet been destroyed.
-        let ptr = unsafe { zinnia_sys::zinnia_recognizer_strerror(self.raw) };
+        let ptr = unsafe { zinnia_sys::zinnia_recognizer_strerror(raw) };
 
         if ptr.is_null() {
-            return "unknown zinnia error".to_string();
+            return Err(Error::Zinnia("unknown zinnia error".to_string()));
         }
 
         // SAFETY:
         // Zinnia returns a C string pointer for the error message when non-null.
-        unsafe { CStr::from_ptr(ptr) }
+        Ok(unsafe { CStr::from_ptr(ptr) }
             .to_string_lossy()
-            .into_owned()
+            .into_owned())
     }
-    fn destroy_raw(&mut self) {
-        if !self.raw.is_null() {
+    fn destroy_raw(&mut self) -> Result<(), Error> {
+        let mut local_raw = self.raw.lock()?;
+        if !local_raw.is_null() {
             // SAFETY:
             // `self.raw` is owned by this struct and was created by
             // `zinnia_recognizer_new`. We only destroy it once here.
-            unsafe { zinnia_sys::zinnia_recognizer_destroy(self.raw) };
-            self.raw = null_mut();
+            unsafe { zinnia_sys::zinnia_recognizer_destroy(*local_raw) };
+            *local_raw = null_mut();
         }
+        Ok(())
     }
 }
 
 impl Drop for Recognizer {
     fn drop(&mut self) {
-        self.destroy_raw();
+        let _ = self.destroy_raw();
     }
 }
 
 impl Drop for Character {
     fn drop(&mut self) {
-        self.destroy_raw();
+        let _ = self.destroy_raw();
     }
 }
 
@@ -241,8 +257,13 @@ pub enum Error {
     PathContainsNul,
     Zinnia(String),
     Uninitialized,
+    LockPoisoned,
 }
-
+impl<T> From<PoisonError<MutexGuard<'_, T>>> for Error {
+    fn from(_: PoisonError<MutexGuard<'_, T>>) -> Self {
+        Error::LockPoisoned
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -250,7 +271,7 @@ mod tests {
     #[test]
     fn recognizer_can_be_created() {
         let recognizer = Recognizer::new();
-        assert!(recognizer.raw.is_null());
+        assert!(recognizer.raw.lock().unwrap().is_null());
     }
 
     #[test]
@@ -271,7 +292,7 @@ mod tests {
 
         let result = recognizer.open("../model/handwriting-ja.model");
         assert!(result.is_ok(), "open failed: {result:?}");
-        assert!(!recognizer.raw.is_null());
+        assert!(!recognizer.raw.lock().unwrap().is_null());
     }
 
     #[test]
@@ -279,19 +300,15 @@ mod tests {
         let mut recognizer = Recognizer::new();
 
         recognizer.open("../model/handwriting-ja.model").unwrap();
-        let first_ptr = recognizer.raw;
 
         recognizer.open("../model/handwriting-ja.model").unwrap();
-        let second_ptr = recognizer.raw;
 
-        assert!(!second_ptr.is_null());
-        // not guaranteed to differ, so only check valid
-        let _ = first_ptr;
+        assert!(!recognizer.raw.lock().unwrap().is_null());
     }
     #[test]
     fn character_can_be_created_lazily() {
         let ch = Character::new();
-        assert!(ch.raw.is_null());
+        assert!(ch.raw.lock().unwrap().is_null());
     }
 
     #[test]
@@ -305,7 +322,7 @@ mod tests {
         ch.add(0, 190, 150).unwrap();
         ch.add(0, 260, 150).unwrap();
 
-        assert!(!ch.raw.is_null());
+        assert!(!ch.raw.lock().unwrap().is_null());
     }
     #[test]
     fn character_can_be_cleared() {
@@ -316,7 +333,7 @@ mod tests {
         ch.add(0, 50, 150).unwrap();
         ch.clear().unwrap();
 
-        assert!(!ch.raw.is_null());
+        assert!(!ch.raw.lock().unwrap().is_null());
     }
     #[test]
     fn classify_simple_stroke_returns_ichi() {
