@@ -48,6 +48,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+## Anki Addon
+
+`kanji_input` is an Anki addon for practicing kanji writing on cards with a
+`{{type:answer}}` field. Instead of typing, you draw each character on a canvas using a mouse or drawing tablet. The addon silently matches your drawing against the expected answer using zinnia recognition.
+
+### Features
+
+- Drawing canvas with grid guide (cross lines)
+- 7 character slots showing your drawn ink strokes for the current word
+- Hint button (手本) that shows the expected character as a faint watermark
+- Undo last stroke (取消), clear canvas (全消), delete last character (削除)
+- Automatically submits when "Show Answer" is clicked
+- Works with mouse and drawing tablets
+- Respects light/dark theme
+- Optional Klee One font for the hint character
+
 ## Models
 
 This crate does not include pretrained models. You can use models from projects like:
