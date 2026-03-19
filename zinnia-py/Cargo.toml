@@ -1,0 +1,14 @@
+[package]
+name = "zinnia-py"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+
+[lib]
+name = "zinnia_py"
+crate-type = ["cdylib"]
+
+[dependencies]
+zinnia = {path = "../zinnia"}
+pyo3 = {version = "0.28", features = ["extension-module", "abi3-py38"]}

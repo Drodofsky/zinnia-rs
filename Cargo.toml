@@ -1,5 +1,5 @@
 [workspace]
-members = ["zinnia","zinnia-sys"]
+members = ["zinnia", "zinnia-py","zinnia-sys"]
 
 resolver = "3"
 [workspace.package]

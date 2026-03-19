@@ -1,2 +1,4 @@
 model/
 target/
+.venv-test/
+*__pycache__
